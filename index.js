@@ -1,7 +1,9 @@
+/* eslint-disable no-empty */
 import colors from 'colors';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import { MongoClient } from 'mongodb';
 
 // port and env
 dotenv.config();
@@ -14,6 +16,26 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     next();
 });
+
+// Set up default mongoose connection
+const mongoDB = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.dtbllhc.mongodb.net/?retryWrites=true&w=majority`;
+
+
+const client = new MongoClient(mongoDB, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
+
+const run = async () => {
+    try {
+        const productCollection = client.db('books').collection('books');
+        app.post('/books', async (req, res) => {
+            res.send(await productCollection.insertOne(req.body));
+        });
+    } finally {
+    }
+};
+run().catch((err) => console.log(err));
 
 colors.setTheme({
     info: 'green',
