@@ -1,10 +1,11 @@
+/* eslint-disable consistent-return */
 /* eslint-disable no-empty */
 import colors from 'colors';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 
 // port and env
 dotenv.config();
@@ -29,11 +30,18 @@ const client = new MongoClient(mongoDB, {
 const run = async () => {
     try {
         const productCollection = client.db('secondBuy').collection('books');
-        const buyersCollection = client.db('secondBuy').collection('buyers');
-        const sellersCollection = client.db('secondBuy').collection('sellers');
+
+        const usersCollection = client.db('secondBuy').collection('users');
+        const bookingsCollection = client.db('secondBuy').collection('bookings');
 
         app.post('/books', async (req, res) => {
             res.send(await productCollection.insertOne(req.body));
+        });
+        app.get('/book/:id', async (req, res) => {
+            const { id } = req.params;
+            const query = { _id: ObjectId(id) };
+            const book = await productCollection.findOne(query);
+            res.send(book);
         });
 
         // saving buyer in USERS collection
@@ -46,18 +54,41 @@ const run = async () => {
             const updatedDoc = {
                 $set: user,
             };
-            let result;
-            if (user.role === 'buyer') {
-                result = buyersCollection.updateOne(filter, updatedDoc, options);
-            }
-            if (user.role === 'seller') {
-                result = sellersCollection.updateOne(filter, updatedDoc, options);
-            }
+
+            const result = await usersCollection.updateOne(filter, updatedDoc, options);
 
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
                 expiresIn: '10d',
             });
             res.send({ result, token });
+        });
+        //  get user role by email from user collection
+        app.get('/user/:email', async (req, res) => {
+            const { email } = req.params;
+            const query = { email };
+            const user = await usersCollection.findOne(query);
+            if (user.role === 'seller') {
+                return res.send({ message: 'invalid user:this is a seller id ' });
+            }
+            res.send({ message: 'success', user });
+        });
+
+        // insert a new booking: PUT
+        app.put('/booking/:email', async (req, res) => {
+            const { email } = req.params;
+            const {bookedProductId}  = req.body;
+            console.log(email, bookedProductId);
+
+            const bookingInfo = req.body;
+            const filter = { email, bookedProductId };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: bookingInfo,
+            };
+
+            const result = await bookingsCollection.updateOne(filter, updatedDoc, options);
+
+            res.send(result);
         });
     } finally {
     }
