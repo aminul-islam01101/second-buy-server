@@ -76,7 +76,7 @@ const run = async () => {
         // insert a new booking: PUT
         app.put('/booking/:email', async (req, res) => {
             const { email } = req.params;
-            const {bookedProductId}  = req.body;
+            const { bookedProductId } = req.body;
             console.log(email, bookedProductId);
 
             const bookingInfo = req.body;
@@ -89,6 +89,32 @@ const run = async () => {
             const result = await bookingsCollection.updateOne(filter, updatedDoc, options);
 
             res.send(result);
+        });
+        // seller id finding
+        app.get('/users/seller/:email', async (req, res) => {
+            const { email } = req.params;
+            const query = { email };
+            console.log(email);
+            const user = await usersCollection.findOne(query);
+            res.send({ isSeller: user?.role === 'seller' });
+        });
+        // admin id finding
+        app.get('/users/admin/:email', async (req, res) => {
+            const { email } = req.params;
+            const query = { email };
+            const user = await usersCollection.findOne(query);
+            res.send({
+                isAdmin: user?.adminRole === 'yes' ,
+            });
+        });
+        // buyer id finding
+        app.get('/users/buyer/:email', async (req, res) => {
+            const { email } = req.params;
+            console.log(email);
+
+            const query = { email };
+            const user = await usersCollection.findOne(query);
+            res.send({ isBuyer: user?.role === 'buyer' });
         });
     } finally {
     }
