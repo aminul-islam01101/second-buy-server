@@ -95,7 +95,7 @@ const run = async () => {
             const query = { email };
             console.log(email);
             const user = await usersCollection.findOne(query);
-            res.send({ isSeller: user?.role === 'seller' });
+            res.send({ isSeller: user?.role === 'seller' && !user?.adminRole });
         });
         // admin id finding
         app.get('/users/admin/:email', async (req, res) => {
@@ -113,7 +113,7 @@ const run = async () => {
 
             const query = { email };
             const user = await usersCollection.findOne(query);
-            res.send({ isBuyer: user?.role === 'buyer' });
+            res.send({ isBuyer: user?.role === 'buyer' && !user?.adminRole });
         });
 
         // dashboard sections routes
@@ -169,19 +169,14 @@ const run = async () => {
             const advertiseStatus = product.advertised;
             res.send(advertiseStatus);
         });
-// myproduct DELETE:
+        // myproduct DELETE:
 
-app.delete('/myproduct/:id', async (req, res) => {
-    const { id } = req.params;
-    const filter = { _id: ObjectId(id) };
-    const result = await productCollection.deleteOne(filter);
-    res.send(result);
-});
-
-
-
-
-
+        app.delete('/myproduct/:id', async (req, res) => {
+            const { id } = req.params;
+            const filter = { _id: ObjectId(id) };
+            const result = await productCollection.deleteOne(filter);
+            res.send(result);
+        });
     } finally {
     }
 };
