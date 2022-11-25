@@ -33,10 +33,9 @@ const run = async () => {
 
         const usersCollection = client.db('secondBuy').collection('users');
         const bookingsCollection = client.db('secondBuy').collection('bookings');
+        const categoryCollection = client.db('secondBuy').collection('bookCategory');
 
-        app.post('/books', async (req, res) => {
-            res.send(await productCollection.insertOne(req.body));
-        });
+        // searching category wise books
         app.get('/book/:id', async (req, res) => {
             const { id } = req.params;
             const query = { _id: ObjectId(id) };
@@ -104,7 +103,7 @@ const run = async () => {
             const query = { email };
             const user = await usersCollection.findOne(query);
             res.send({
-                isAdmin: user?.adminRole === 'yes' ,
+                isAdmin: user?.adminRole === 'yes',
             });
         });
         // buyer id finding
@@ -116,6 +115,73 @@ const run = async () => {
             const user = await usersCollection.findOne(query);
             res.send({ isBuyer: user?.role === 'buyer' });
         });
+
+        // dashboard sections routes
+
+        // seller route
+        // add product page: GET Category
+
+        app.get('/bookcategory', async (req, res) => {
+            const query = {};
+            const categories = await categoryCollection.find(query).toArray();
+            res.send(categories);
+        });
+        // add product page: POST a book
+        app.post('/addbook', async (req, res) => {
+            const { bookName, edition } = req.body;
+            const query = { bookName, edition };
+            const alreadyStored = await productCollection.findOne(query);
+            if (alreadyStored) {
+                res.send({ message: 'You Have already posted this book' });
+                return;
+            }
+            res.send(await productCollection.insertOne(req.body));
+        });
+
+        // my product page: GET a sellers all product
+
+        app.get('/users/seller', async (req, res) => {
+            const { email } = req.query;
+
+            const query = { sellerEmail: email };
+            const myProducts = await productCollection.find(query).toArray();
+            res.send(myProducts);
+        });
+        // myProduct Page: advertise functionality
+        app.put('/myproduct/:id', async (req, res) => {
+            const { id } = req.params;
+            const query = { _id: ObjectId(id) };
+            const selectedProduct = await productCollection.findOne(query);
+            const { status, advertised } = selectedProduct;
+            console.log(status, advertised);
+
+            if (status === 'available') {
+                const filter = { advertised };
+                const options = { upsert: true };
+                const updatedDoc = {
+                    $set: { advertised: !advertised },
+                };
+                const result = await productCollection.updateOne(filter, updatedDoc, options);
+                console.log(result);
+            }
+
+            const product = await productCollection.findOne(query);
+            const advertiseStatus = product.advertised;
+            res.send(advertiseStatus);
+        });
+// myproduct DELETE:
+
+app.delete('/myproduct/:id', async (req, res) => {
+    const { id } = req.params;
+    const filter = { _id: ObjectId(id) };
+    const result = await productCollection.deleteOne(filter);
+    res.send(result);
+});
+
+
+
+
+
     } finally {
     }
 };

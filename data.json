@@ -1,0 +1,21 @@
+{
+    "_id": { "$oid": "6380942e839956b9de67af83" },
+    "bookName": "Long walk to freedom",
+    "authorName": "Nelson Mendella",
+    "originalPrice": "120",
+    "resalePrice": "80",
+    "buyingYear": "2020",
+    "edition": "2",
+    "phoneNumber": "015876987125454",
+    "location": "excellent",
+    "condition": "Dhaka",
+    "categoryId": "3",
+    "photo": {},
+    "description": "The autobiography Long Walk to Freedom, which chronicles his early life and years in prison, was published in 1994. An unfinished draft of his second volume of memoirs was completed by Mandla Langa and released posthumously as Dare Not Linger: The Presidential Years (2017).",
+    "image": "https://i.ibb.co/z2YJyWt/long-walk-to-freedom.jpg",
+    "postingTime": "2022-11-25T05:57:35.398Z",
+    "sellerName": "updated sdfasd",
+    "sellerEmail": "josaf12931@3mkz.com",
+    "status": "available",
+    "advertised": false
+}
