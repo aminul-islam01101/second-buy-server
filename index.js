@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { MongoClient, ObjectId } from 'mongodb';
+import Stripe from 'stripe';
 
 // port and env
 dotenv.config();
@@ -18,6 +19,8 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     next();
 });
+// stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 // Set up default mongoose connection
 const mongoDB = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.dtbllhc.mongodb.net/?retryWrites=true&w=majority`;
@@ -34,6 +37,7 @@ const run = async () => {
         const usersCollection = client.db('secondBuy').collection('users');
         const bookingsCollection = client.db('secondBuy').collection('bookings');
         const categoryCollection = client.db('secondBuy').collection('bookCategory');
+        const paymentsCollection = client.db('secondBuy').collection('payments');
 
         // searching category wise books
         app.get('/book/:id', async (req, res) => {
@@ -48,6 +52,7 @@ const run = async () => {
         app.put('/user/:email', async (req, res) => {
             const { email } = req.params;
             const user = req.body;
+
             const filter = { email };
             const options = { upsert: true };
             const updatedDoc = {
@@ -95,7 +100,7 @@ const run = async () => {
             const query = { email };
             console.log(email);
             const user = await usersCollection.findOne(query);
-            res.send({ isSeller: user?.role === 'seller' && !user?.adminRole });
+            res.send({ isSeller: user?.role === 'seller' });
         });
         // admin id finding
         app.get('/users/admin/:email', async (req, res) => {
@@ -103,7 +108,7 @@ const run = async () => {
             const query = { email };
             const user = await usersCollection.findOne(query);
             res.send({
-                isAdmin: user?.adminRole === 'yes',
+                isAdmin: user?.role === 'admin',
             });
         });
         // buyer id finding
@@ -113,7 +118,7 @@ const run = async () => {
 
             const query = { email };
             const user = await usersCollection.findOne(query);
-            res.send({ isBuyer: user?.role === 'buyer' && !user?.adminRole });
+            res.send({ isBuyer: user?.role === 'buyer' });
         });
 
         // dashboard sections routes
@@ -153,21 +158,22 @@ const run = async () => {
             const query = { _id: ObjectId(id) };
             const selectedProduct = await productCollection.findOne(query);
             const { status, advertised } = selectedProduct;
-            console.log(status, advertised);
 
             if (status === 'available') {
-                const filter = { advertised };
+                console.log(status, advertised);
+                const filter = { _id: ObjectId(id) };
                 const options = { upsert: true };
                 const updatedDoc = {
                     $set: { advertised: !advertised },
                 };
                 const result = await productCollection.updateOne(filter, updatedDoc, options);
-                console.log(result);
+                res.send(result);
+                console.log(selectedProduct);
+
+                return;
             }
 
-            const product = await productCollection.findOne(query);
-            const advertiseStatus = product.advertised;
-            res.send(advertiseStatus);
+            res.send('product is not available');
         });
         // myproduct DELETE:
 
@@ -175,6 +181,121 @@ const run = async () => {
             const { id } = req.params;
             const filter = { _id: ObjectId(id) };
             const result = await productCollection.deleteOne(filter);
+            res.send(result);
+        });
+
+        // admin route work
+
+        // GET all seller
+        app.get('/users/sellers', async (req, res) => {
+            const query = { role: 'seller' };
+            const myProducts = await usersCollection.find(query).toArray();
+            res.send(myProducts);
+        });
+
+        // verify a seller
+
+        app.put('/seller/:email', async (req, res) => {
+            const { email } = req.params;
+            const query = { email };
+            const selectedSeller = await usersCollection.findOne(query);
+
+            const { verified } = selectedSeller;
+
+            const filter = { email };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: { verified: !verified },
+            };
+            const result = await usersCollection.updateOne(filter, updatedDoc, options);
+
+            res.send(result);
+        });
+
+        //  DELETE: a seller
+
+        app.delete('/users/sellers', async (req, res) => {
+            const { email } = req.query;
+            const filter = { email };
+            const result = await usersCollection.deleteOne(filter);
+            res.send(result);
+        });
+
+        // GET all seller
+        app.get('/users/buyers', async (req, res) => {
+            const query = { role: 'buyer' };
+            const myProducts = await usersCollection.find(query).toArray();
+            res.send(myProducts);
+        });
+        //  DELETE: a buyer
+        app.delete('/users/buyers', async (req, res) => {
+            const { email } = req.query;
+            const filter = { email };
+            const result = await usersCollection.deleteOne(filter);
+            res.send(result);
+        });
+        // reported page
+        //!     "true"  should be true
+        app.get('/products/reported', async (req, res) => {
+            const query = { reported: 'true' };
+            const reportedProducts = await productCollection.find(query).toArray();
+            res.send(reportedProducts);
+        });
+        // DELETE reported products
+        app.delete('/products/reported', async (req, res) => {
+            const { id } = req.query;
+            const filter = { _id: ObjectId(id) };
+            const result = await productCollection.deleteOne(filter);
+            res.send(result);
+        });
+
+        // buyer page routes
+        // my orders page: GET all orders of a buyer
+        app.get('/users/buyer', async (req, res) => {
+            const { email } = req.query;
+
+            const query = { buyerEmail: email };
+            const myOrders = await bookingsCollection.find(query).toArray();
+            res.send(myOrders);
+        });
+        // payments
+
+        app.get('/payment/:id', async (req, res) => {
+            const { id } = req.params;
+            console.log(id);
+
+            const query = { _id: ObjectId(id) };
+            const bookedProduct = await bookingsCollection.findOne(query);
+            res.send(bookedProduct);
+        });
+        // payment intent
+        app.post('/create-payment-intent', async (req, res) => {
+            const booking = req.body;
+            const { price } = booking;
+            const amount = price * 100;
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                currency: 'usd',
+                amount,
+                payment_method_types: ['card'],
+            });
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        });
+        // POST a payment
+        app.post('/payments', async (req, res) => {
+            const payment = req.body;
+            const result = await paymentsCollection.insertOne(payment);
+            const id = payment.bookingId;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    transactionId: payment.transactionId,
+                },
+            };
+            const updatedResult = await bookingsCollection.updateOne(filter, updatedDoc);
             res.send(result);
         });
     } finally {
