@@ -30,14 +30,49 @@ const client = new MongoClient(mongoDB, {
     useUnifiedTopology: true,
 });
 
+// JWT middleware
+function verifyJWT(req, res, next) {
+    const authHeader = req.headers.authorization;
+    console.log(authHeader.error);
+
+    if (!authHeader) {
+        return res.status(401).send('unauthorized access');
+    }
+
+    const token = authHeader.split(' ')[1];
+    console.log(token.warn);
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).send({ message: 'forbidden access' });
+        }
+        req.decoded = decoded;
+        console.log(req.decoded);
+        next();
+    });
+}
+
 const run = async () => {
     try {
         const productCollection = client.db('secondBuy').collection('books');
-
         const usersCollection = client.db('secondBuy').collection('users');
         const bookingsCollection = client.db('secondBuy').collection('bookings');
         const categoryCollection = client.db('secondBuy').collection('bookCategory');
         const paymentsCollection = client.db('secondBuy').collection('payments');
+
+        // verify admin middleware
+        const verifyAdmin = async (req, res, next) => {
+            const decodedEmail = req.decoded.email;
+            console.log(decodedEmail.error);
+            
+            const query = { email: decodedEmail };
+            const user = await usersCollection.findOne(query);
+
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' });
+            }
+            next();
+        };
 
         // searching category wise books
         app.get('/book/:id', async (req, res) => {
@@ -61,7 +96,7 @@ const run = async () => {
 
             const result = await usersCollection.updateOne(filter, updatedDoc, options);
 
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+            const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
                 expiresIn: '10d',
             });
             res.send({ result, token });
@@ -187,7 +222,7 @@ const run = async () => {
         // admin route work
 
         // GET all seller
-        app.get('/users/sellers', async (req, res) => {
+        app.get('/users/sellers', verifyJWT, verifyJWT, async (req, res) => {
             const query = { role: 'seller' };
             const myProducts = await usersCollection.find(query).toArray();
             res.send(myProducts);
@@ -251,7 +286,7 @@ const run = async () => {
 
         // buyer page routes
         // my orders page: GET all orders of a buyer
-        app.get('/users/buyer', async (req, res) => {
+        app.get('/users/buyer', verifyJWT, async (req, res) => {
             const { email } = req.query;
 
             const query = { buyerEmail: email };
@@ -296,6 +331,20 @@ const run = async () => {
                 },
             };
             const updatedResult = await bookingsCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+        });
+
+        // make product status sold
+        app.put('/paid/:id', async (req, res) => {
+            const { id } = req.params;
+
+            const filter = { _id: ObjectId(id) };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: { status: 'sold' },
+            };
+            const result = await productCollection.updateOne(filter, updatedDoc, options);
+
             res.send(result);
         });
     } finally {
