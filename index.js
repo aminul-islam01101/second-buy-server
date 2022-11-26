@@ -1,3 +1,4 @@
+/* eslint-disable no-param-reassign */
 /* eslint-disable consistent-return */
 /* eslint-disable no-empty */
 import colors from 'colors';
@@ -64,7 +65,7 @@ const run = async () => {
         const verifyAdmin = async (req, res, next) => {
             const decodedEmail = req.decoded.email;
             console.log(decodedEmail.error);
-            
+
             const query = { email: decodedEmail };
             const user = await usersCollection.findOne(query);
 
@@ -73,6 +74,31 @@ const run = async () => {
             }
             next();
         };
+
+        app.get('/categories', async (req, res) => {
+            const query = {};
+            const categories = await categoryCollection.find(query).toArray();
+            const availableQuery = { status: 'available' };
+            const availableProducts = await productCollection.find(availableQuery).toArray();
+
+            categories.forEach(async (category) => {
+                const { categoryId } = category;
+                const products = availableProducts.filter(
+                    (product) => product.categoryId === categoryId
+                );
+                const newFilter = { categoryId };
+                const newOptions = { upsert: true };
+                const newUpdatedDoc = {
+                    $set: { products },
+                };
+                const updatedCategory = await categoryCollection.updateOne(
+                    newFilter,
+                    newUpdatedDoc,
+                    newOptions
+                );
+                res.send(categories);
+            });
+        });
 
         // searching category wise books
         app.get('/book/:id', async (req, res) => {
@@ -109,6 +135,14 @@ const run = async () => {
             if (user.role === 'seller') {
                 return res.send({ message: 'invalid user:this is a seller id ' });
             }
+            res.send({ message: 'success', user });
+        });
+
+        // for dashboard user role
+        app.get('/user', async (req, res) => {
+            const { email } = req.query;
+            const query = { email };
+            const user = await usersCollection.findOne(query);
             res.send({ message: 'success', user });
         });
 
@@ -166,6 +200,27 @@ const run = async () => {
             const categories = await categoryCollection.find(query).toArray();
             res.send(categories);
         });
+
+        //! check this route
+        app.get('/bookcategory/:id', async (req, res) => {
+            const { id } = req.params;
+
+            const query = {
+                categoryId: id,
+                status: 'available',
+            };
+            const categories = await productCollection.find(query).toArray();
+
+            const filter = { categoryId: id };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: { products: categories },
+            };
+            const result = await categoryCollection.updateOne(filter, updatedDoc, options);
+
+            res.send(result);
+        });
+
         // add product page: POST a book
         app.post('/addbook', async (req, res) => {
             const { bookName, edition } = req.body;
@@ -175,7 +230,9 @@ const run = async () => {
                 res.send({ message: 'You Have already posted this book' });
                 return;
             }
-            res.send(await productCollection.insertOne(req.body));
+            const addBook = await productCollection.insertOne(req.body);
+
+            res.send(addBook);
         });
 
         // my product page: GET a sellers all product
@@ -222,7 +279,7 @@ const run = async () => {
         // admin route work
 
         // GET all seller
-        app.get('/users/sellers', verifyJWT, verifyJWT, async (req, res) => {
+        app.get('/users/sellers', verifyJWT, verifyAdmin, async (req, res) => {
             const query = { role: 'seller' };
             const myProducts = await usersCollection.find(query).toArray();
             res.send(myProducts);
