@@ -5,6 +5,7 @@ import colors from 'colors';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+
 import jwt from 'jsonwebtoken';
 import { MongoClient, ObjectId } from 'mongodb';
 import Stripe from 'stripe';
@@ -60,6 +61,7 @@ const run = async () => {
         const bookingsCollection = client.db('secondBuy').collection('bookings');
         const categoryCollection = client.db('secondBuy').collection('bookCategory');
         const paymentsCollection = client.db('secondBuy').collection('payments');
+        const wishCollection = client.db('secondBuy').collection('wishlist');
 
         // verify admin middleware
         const verifyAdmin = async (req, res, next) => {
@@ -75,29 +77,18 @@ const run = async () => {
             next();
         };
 
-        app.get('/categories', async (req, res) => {
-            const query = {};
-            const categories = await categoryCollection.find(query).toArray();
-            const availableQuery = { status: 'available' };
-            const availableProducts = await productCollection.find(availableQuery).toArray();
+        // get advertised products
+        app.get('/advertised', async (req, res) => {
+            const query = { advertised: true, status: 'available' };
+            const advertised = await productCollection.find(query).toArray();
+            res.send(advertised);
+        });
 
-            categories.forEach(async (category) => {
-                const { categoryId } = category;
-                const products = availableProducts.filter(
-                    (product) => product.categoryId === categoryId
-                );
-                const newFilter = { categoryId };
-                const newOptions = { upsert: true };
-                const newUpdatedDoc = {
-                    $set: { products },
-                };
-                const updatedCategory = await categoryCollection.updateOne(
-                    newFilter,
-                    newUpdatedDoc,
-                    newOptions
-                );
-                res.send(categories);
-            });
+        // all books
+        app.get('/books', async (req, res) => {
+            const query = {};
+            const books = await productCollection.find(query).toArray();
+            res.send(books);
         });
 
         // searching category wise books
@@ -106,6 +97,26 @@ const run = async () => {
             const query = { _id: ObjectId(id) };
             const book = await productCollection.findOne(query);
             res.send(book);
+        });
+        app.get('/booksold', async (req, res) => {
+            const query = { status: 'sold' };
+            const bookSold = await productCollection.find(query).toArray();
+            res.send(bookSold);
+        });
+        // Book reported route
+        app.put('/book/reported/:id', async (req, res) => {
+            const { id } = req.params;
+
+            const filter = { _id: ObjectId(id) };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: { isReported: true },
+            };
+            console.log(id);
+
+            const result = await productCollection.updateOne(filter, updatedDoc, options);
+
+            res.send(result);
         });
 
         // saving buyer in USERS collection
@@ -128,7 +139,7 @@ const run = async () => {
             res.send({ result, token });
         });
         //  get user role by email from user collection
-        app.get('/user/:email', async (req, res) => {
+        app.get('/buyer/:email', async (req, res) => {
             const { email } = req.params;
             const query = { email };
             const user = await usersCollection.findOne(query);
@@ -195,30 +206,52 @@ const run = async () => {
         // seller route
         // add product page: GET Category
 
+        // all categories
         app.get('/bookcategory', async (req, res) => {
             const query = {};
             const categories = await categoryCollection.find(query).toArray();
             res.send(categories);
         });
 
-        //! check this route
-        app.get('/bookcategory/:id', async (req, res) => {
-            const { id } = req.params;
+        //  category routes: products add to category collection
+        app.get('/categories', async (req, res) => {
+            const query = {};
+            const categories = await categoryCollection.find(query).toArray();
+            const availableQuery = { status: 'available' };
+            const availableProducts = await productCollection.find(availableQuery).toArray();
 
+            if (availableProducts) {
+                categories.forEach(async (category) => {
+                    const { categoryId } = category;
+                    const products = availableProducts.filter(
+                        (product) => product.categoryId === categoryId
+                    );
+                    const filter = { categoryId };
+                    const options = { upsert: true };
+                    const updatedDoc = {
+                        $set: { products },
+                    };
+                    const updatedCategory = await categoryCollection.updateOne(
+                        filter,
+                        updatedDoc,
+                        options
+                    );
+                });
+                res.send(categories);
+                return;
+            }
+
+            res.send('No products found');
+        });
+
+        // get a category data
+        app.get('/category/:id', async (req, res) => {
+            const { id } = req.params;
             const query = {
                 categoryId: id,
-                status: 'available',
             };
-            const categories = await productCollection.find(query).toArray();
-
-            const filter = { categoryId: id };
-            const options = { upsert: true };
-            const updatedDoc = {
-                $set: { products: categories },
-            };
-            const result = await categoryCollection.updateOne(filter, updatedDoc, options);
-
-            res.send(result);
+            const categories = await categoryCollection.findOne(query);
+            res.send(categories);
         });
 
         // add product page: POST a book
@@ -284,6 +317,12 @@ const run = async () => {
             const myProducts = await usersCollection.find(query).toArray();
             res.send(myProducts);
         });
+        // GET all seller stat
+        app.get('/users/allseller', async (req, res) => {
+            const query = { role: 'seller' };
+            const myProducts = await usersCollection.find(query).toArray();
+            res.send(myProducts);
+        });
 
         // verify a seller
 
@@ -304,6 +343,15 @@ const run = async () => {
             res.send(result);
         });
 
+        // is seller verified
+        app.get('/sellers/verified/:email', async (req, res) => {
+            const { email } = req.params;
+
+            const query = { email };
+            const seller = await usersCollection.findOne(query);
+            res.send(seller);
+        });
+
         //  DELETE: a seller
 
         app.delete('/users/sellers', async (req, res) => {
@@ -313,11 +361,17 @@ const run = async () => {
             res.send(result);
         });
 
-        // GET all seller
+        // GET all buyer
         app.get('/users/buyers', async (req, res) => {
             const query = { role: 'buyer' };
-            const myProducts = await usersCollection.find(query).toArray();
-            res.send(myProducts);
+            const buyers = await usersCollection.find(query).toArray();
+            res.send(buyers);
+        });
+        // GET all buyer statt
+        app.get('/users/allbuyer', async (req, res) => {
+            const query = { role: 'buyer' };
+            const buyers = await usersCollection.find(query).toArray();
+            res.send(buyers);
         });
         //  DELETE: a buyer
         app.delete('/users/buyers', async (req, res) => {
@@ -327,9 +381,9 @@ const run = async () => {
             res.send(result);
         });
         // reported page
-        //!     "true"  should be true
+
         app.get('/products/reported', async (req, res) => {
-            const query = { reported: 'true' };
+            const query = { isReported: true };
             const reportedProducts = await productCollection.find(query).toArray();
             res.send(reportedProducts);
         });
@@ -401,7 +455,44 @@ const run = async () => {
                 $set: { status: 'sold' },
             };
             const result = await productCollection.updateOne(filter, updatedDoc, options);
+            const wishlistResult = await wishCollection.updateOne(filter, updatedDoc, options);
 
+            res.send(result);
+        });
+        // optional features
+        // wish list
+        // add to wishlist
+        app.put('/addtowishlist/:id', async (req, res) => {
+            const { id } = req.params;
+            const product = req.body;
+            console.log(id);
+            console.log(product);
+
+            const filter = { _id: ObjectId(id) };
+            const options = { upsert: true };
+            const updatedDoc = {
+                $set: product,
+            };
+
+            const result = await wishCollection.updateOne(filter, updatedDoc, options);
+
+            res.send(result);
+        });
+        // my wishlist
+        app.get('/mywishlist/:email', async (req, res) => {
+            const { email } = req.params;
+            
+
+            const query = { buyerEmail: email };
+            const myWishlist = await wishCollection.find(query).toArray();
+            res.send(myWishlist);
+        });
+
+        // DELETE a wish
+        app.delete('/wishlist/:id', async (req, res) => {
+            const { id } = req.params;
+            const filter = { _id: ObjectId(id) };
+            const result = await wishCollection.deleteOne(filter);
             res.send(result);
         });
     } finally {
