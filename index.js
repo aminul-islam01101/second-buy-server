@@ -327,7 +327,7 @@ const run = async () => {
 
         // verify a seller
 
-        app.put('/seller/:email', async (req, res) => {
+        app.put('/seller/:email', verifyJWT, verifyAdmin, async (req, res) => {
             const { email } = req.params;
             const query = { email };
             const selectedSeller = await usersCollection.findOne(query);
@@ -449,7 +449,7 @@ const run = async () => {
         // make product status sold
         app.put('/paid/:id', async (req, res) => {
             const { id } = req.params;
-            const  buyerInfo = req.body;
+            const buyerInfo = req.body;
             const { buyerPhoneNumber, buyerLocation, buyerEmail } = buyerInfo;
 
             const filter = { _id: ObjectId(id) };
