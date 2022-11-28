@@ -325,6 +325,7 @@ const run = async () => {
             res.send(myProducts);
         });
 
+        
         // verify a seller
 
         app.put('/seller/:email', verifyJWT, verifyAdmin, async (req, res) => {
