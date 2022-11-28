@@ -449,11 +449,13 @@ const run = async () => {
         // make product status sold
         app.put('/paid/:id', async (req, res) => {
             const { id } = req.params;
+            const  buyerInfo = req.body;
+            const { buyerPhoneNumber, buyerLocation, buyerEmail } = buyerInfo;
 
             const filter = { _id: ObjectId(id) };
             const options = { upsert: true };
             const updatedDoc = {
-                $set: { status: 'sold' },
+                $set: { status: 'sold', buyerPhoneNumber, buyerLocation, buyerEmail },
             };
             const result = await productCollection.updateOne(filter, updatedDoc, options);
             const wishlistResult = await wishCollection.updateOne(filter, updatedDoc, options);
