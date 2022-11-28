@@ -62,6 +62,7 @@ const run = async () => {
         const categoryCollection = client.db('secondBuy').collection('bookCategory');
         const paymentsCollection = client.db('secondBuy').collection('payments');
         const wishCollection = client.db('secondBuy').collection('wishlist');
+        const blogsCollection = client.db('secondBuy').collection('blogs');
 
         // verify admin middleware
         const verifyAdmin = async (req, res, next) => {
@@ -481,7 +482,6 @@ const run = async () => {
         // my wishlist
         app.get('/mywishlist/:email', async (req, res) => {
             const { email } = req.params;
-            
 
             const query = { buyerEmail: email };
             const myWishlist = await wishCollection.find(query).toArray();
@@ -493,6 +493,22 @@ const run = async () => {
             const { id } = req.params;
             const filter = { _id: ObjectId(id) };
             const result = await wishCollection.deleteOne(filter);
+            res.send(result);
+        });
+        // Mu buyers
+        app.get('/mybuyers/:email', async (req, res) => {
+            const { email } = req.params;
+            console.log(email.error);
+
+            const filter = { status: 'sold', sellerEmail: email };
+            const result = await productCollection.find(filter).toArray();
+            res.send(result);
+        });
+
+        // GET BLOGS
+        app.get('/blogs', async (req, res) => {
+            const filter = {};
+            const result = await blogsCollection.find(filter).toArray();
             res.send(result);
         });
     } finally {
