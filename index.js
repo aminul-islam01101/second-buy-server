@@ -312,7 +312,7 @@ const run = async () => {
 
         // admin route work
 
-        // GET all seller
+        // GET all seller route
         app.get('/users/sellers', verifyJWT, verifyAdmin, async (req, res) => {
             const query = { role: 'seller' };
             const myProducts = await usersCollection.find(query).toArray();
